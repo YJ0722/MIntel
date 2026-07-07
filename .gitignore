@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 테스트/린트 도구 캐시 (추후 pytest, mypy, ruff 등 도입 시 대비)
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 환경변수 / 비밀키 (API 토큰 등을 저장하게 될 경우를 대비)
+.env
+.env.*
+*.env
+
+# 원본 영상 및 추출 프레임 (용량이 크므로 git에는 포함하지 않음)
+# .gitkeep : 대용량 데이터는 git에 올리지 않더라도 폴더 구조는 그대로 유지하기 위해 사용
+storage/videos/*
+!storage/videos/.gitkeep
+
+storage/frames/*
+!storage/frames/.gitkeep
+
+# Qdrant 로컬 DB 데이터
+storage/db/*
+!storage/db/.gitkeep
+
+# YOLO 등 자동 다운로드되는 모델 가중치 (용량이 크므로 git에는 포함하지 않음)
+*.pt
+
+# 개인 로컬 IDE 설정 (conda 인터프리터 경로 등 사람마다 다른 값이 하드코딩되어 있어
+# 팀원/다른 기기와 공유하지 않는다. 필요하면 각자 로컬에서 새로 만들어 쓴다.)
+.vscode/
+
+# macOS
+.DS_Store
