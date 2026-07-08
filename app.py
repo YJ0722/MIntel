@@ -49,9 +49,10 @@ def main() -> None:
     # 2번 방 (Storage Layer): 가공된 Key-frame -> Qdrant 벡터 DB(config.DB_DIR) 저장
     # ------------------------------------------------------------
     print("\n[2/3] 벡터 DB 저장 파이프라인 실행 (pipeline_storage)")
-    storage = pipeline_storage.run_storage_setup(db_dir=config.DB_DIR)
-    indexed_count = pipeline_storage.index_keyframes(storage, saved_keyframes)
-    print(f"      -> Qdrant에 색인된 Key-frame 수: {indexed_count}")
+    indexed_count = pipeline_storage.run_storage_pipeline(
+        saved_keyframes, db_path=config.DB_DIR
+    )
+    print(f"      -> Qdrant에 적재된 Key-frame 수: {indexed_count}")
 
     # ------------------------------------------------------------
     # 3번 방: Ollama(llama3, llava) 기반 검증/추론
