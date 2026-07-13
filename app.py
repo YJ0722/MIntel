@@ -10,7 +10,9 @@ app.py
         -> 2번 방 (pipeline_storage, Storage Layer)
         : 가공이 끝난 Key-frame(벡터 + 메타데이터)을 로컬 Qdrant DB에 저장한다.
         -> 3번 방 (pipeline_inference, Inference Layer)
-        : Ollama(llama3, llava)로 프레임 내용을 검증/설명한다.
+        : 사용자 질문을 받아 Qdrant 검색(SearchEngine) -> LLaVA 이미지 검증
+          (LlavaAnalyzer) -> Llama-3 최종 답변 생성(LlamaResponder) 순서로
+          하이브리드 검증을 수행한다.
 
 입출력 경로:
     모든 입력/출력 데이터 경로(영상, 프레임, 벡터 DB)는 config.py 한 곳에서
@@ -55,12 +57,11 @@ def main() -> None:
     print(f"      -> Qdrant에 적재된 Key-frame 수: {indexed_count}")
 
     # ------------------------------------------------------------
-    # 3번 방: Ollama(llama3, llava) 기반 검증/추론
+    # 3번 방 (Inference Layer): 사용자 질문 -> Qdrant 검색 -> LLaVA 검증
+    #   -> Llama-3 최종 답변 생성
     # ------------------------------------------------------------
     print("\n[3/3] 로컬 LLM/VLM 추론 파이프라인 실행 (pipeline_inference)")
-    pipeline_inference.run_inference_smoke_test(frames_dir=config.FRAMES_DIR)
-    # TODO: 추후 2번 방에서 검색된(혹은 새로 추출된) Key-frame들을 llava로 설명시키고,
-    #       그 결과를 llama3로 재검증/요약하는 하이브리드 검증 로직이 들어올 예정.
+    pipeline_inference.run_inference_pipeline(config.SAMPLE_QUERY, db_path=config.DB_DIR)
 
     print("\n" + "=" * 60)
     print("파이프라인 실행 완료")

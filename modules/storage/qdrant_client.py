@@ -184,13 +184,21 @@ class QdrantStorageManager:
             return 0
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list:
-        """쿼리 벡터와 가장 유사한 포인트들을 검색한다 (실패 시 빈 리스트)."""
+        """쿼리 벡터와 가장 유사한 포인트들을 검색한다 (실패 시 빈 리스트).
+
+        qdrant-client 1.10+ 부터 기존 `search()` API는 제거되었고 `query_points()`로
+        대체되었다. 이 메서드는 `query_points()`를 호출한 뒤 `QueryResponse.points`
+        (ScoredPoint 리스트, 각 원소는 `.id`/`.score`/`.payload` 속성을 가짐)만
+        꺼내 돌려줘서, 호출하는 쪽(SearchEngine 등)은 API 변경과 무관하게 동일한
+        인터페이스를 사용할 수 있다.
+        """
         try:
-            return self.client.search(
+            response = self.client.query_points(
                 collection_name=self.collection_name,
-                query_vector=query_vector,
+                query=query_vector,
                 limit=top_k,
             )
+            return response.points
         except Exception as exc:
             print(f"[QdrantStorageManager] 검색 중 오류 발생: {exc}")
             return []

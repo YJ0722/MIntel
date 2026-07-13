@@ -27,3 +27,10 @@ FRAMES_DIR = STORAGE_DIR / "frames"
 
 # 2번 방(pipeline_storage) 출력: 로컬 Qdrant 벡터 DB 파일이 저장되는 폴더
 DB_DIR = STORAGE_DIR / "db"
+
+# 3번 방(pipeline_inference) 입력: app.py 실행 시 고정으로 사용하는 데모용 질문.
+# 아직 사용자가 실제로 질문을 입력하는 창구(웹/CLI 입력 등)가 없어서, app.py는
+# 항상 이 값 하나로만 파이프라인을 실행한다. 다른 질문으로 테스트하고 싶으면
+# 이 값을 바꾸거나, `python pipeline_inference.py "질문"`처럼 커맨드라인
+# 인자로 직접 넘겨서 실행하면 된다 (그 경우 이 값은 쓰이지 않는다).
+SAMPLE_QUERY = "차가 보이는 장면을 찾아줘"

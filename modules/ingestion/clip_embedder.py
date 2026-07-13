@@ -95,6 +95,35 @@ class ClipEmbedder:
         embedding = image_features[0].cpu().numpy().tolist()
         return embedding
 
+    def embed_text(self, text: str) -> list:
+        """
+        텍스트 한 줄을 CLIP 텍스트 인코더에 통과시켜, 이미지 임베딩과 동일한
+        벡터 공간(길이 512)의 특징 벡터를 추출한다.
+
+        CLIP은 이미지와 텍스트를 같은 벡터 공간에 투영하도록 학습되어 있어서,
+        이 벡터로 Qdrant에 저장된 이미지 임베딩과 직접 유사도 검색(텍스트 -> 이미지
+        검색)을 할 수 있다. (modules/inference/search_engine.py에서 사용)
+
+        Args:
+            text: 벡터로 변환할 검색 질의 문자열 (예: "빨간 차가 보이는 장면")
+
+        Returns:
+            순수 파이썬 float 리스트 (openai/clip-vit-base-patch32 기준 길이 512).
+        """
+        inputs = self.processor(
+            text=[text], return_tensors="pt", padding=True, truncation=True
+        ).to(self.device)
+
+        with torch.no_grad():
+            output = self.model.get_text_features(**inputs)
+
+        # embed_image()와 동일한 이유로, transformers 버전에 따라 반환 형태가
+        # 다를 수 있어 pooler_output을 우선 사용하고 없으면 반환값 자체를 쓴다.
+        text_features = getattr(output, "pooler_output", output)
+
+        embedding = text_features[0].cpu().numpy().tolist()
+        return embedding
+
 
 if __name__ == "__main__":
     import sys
