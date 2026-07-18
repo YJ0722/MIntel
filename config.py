@@ -28,6 +28,10 @@ FRAMES_DIR = STORAGE_DIR / "frames"
 # 2번 방(pipeline_storage) 출력: 로컬 Qdrant 벡터 DB 파일이 저장되는 폴더
 DB_DIR = STORAGE_DIR / "db"
 
+# 3번 방(pipeline_inference) 출력: 검색+시각 추론이 끝난 최종 결과(result.json)와
+# 실행 로그(run.log)를 실행 시각별 서브 폴더(YYYYMMDD_HHMMSS)로 저장하는 폴더.
+RESULTS_DIR = STORAGE_DIR / "results"
+
 # 3번 방(pipeline_inference) 입력: app.py 실행 시 고정으로 사용하는 데모용 질문.
 # 아직 사용자가 실제로 질문을 입력하는 창구(웹/CLI 입력 등)가 없어서, app.py는
 # 항상 이 값 하나로만 파이프라인을 실행한다. 다른 질문으로 테스트하고 싶으면

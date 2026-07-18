@@ -26,6 +26,10 @@ storage/frames/*
 storage/db/*
 !storage/db/.gitkeep
 
+# 실행 결과 데이터
+storage/results/*
+!storage/results/.gitkeep
+
 # YOLO 등 자동 다운로드되는 모델 가중치 (용량이 크므로 git에는 포함하지 않음)
 *.pt
 

@@ -14,11 +14,14 @@ pipeline_inference.py
         -> LlamaResponder (modules/inference/llama_responder.py)
            : LLaVA 검증 결과와 사용자 질문을 종합해 Llama-3가 자연스러운
              한국어 최종 답변을 생성한다.
+        -> ResultManager (modules/storage/result_manager.py)
+           : 검색+시각 추론이 끝난 최종 데이터를 storage/results/<실행시각>/
+             폴더에 result.json + run.log로 저장한다.
 
-이 파일은 위 3개 모듈을 순서대로 호출하는 오케스트레이터(제어 타워) 역할만
-담당하며, 각 모델의 세부 구현(프롬프트, 응답 파싱, 메모리 관리 등)은 해당
-모듈에 위임한다. Ingestion/Storage Layer가 modules/ingestion, modules/storage를
-오케스트레이션하는 것과 동일한 구조다.
+이 파일은 위 4개 모듈을 순서대로 호출하는 오케스트레이터(제어 타워) 역할만
+담당하며, 각 모델/모듈의 세부 구현(프롬프트, 응답 파싱, 메모리 관리, 결과
+파일 포맷 등)은 해당 모듈에 위임한다. Ingestion/Storage Layer가
+modules/ingestion, modules/storage를 오케스트레이션하는 것과 동일한 구조다.
 
 사전 준비 사항 (로컬 환경):
     1. Ollama 앱/서버가 실행 중이어야 한다. (예: `ollama serve` 또는 macOS 앱 실행)
@@ -45,6 +48,7 @@ import config
 from modules.inference.llama_responder import LlamaResponder
 from modules.inference.llava_analyzer import LlavaAnalyzer
 from modules.inference.search_engine import SearchEngine
+from modules.storage.result_manager import ResultManager
 
 DEFAULT_TOP_K = 3
 
@@ -141,53 +145,71 @@ def run_inference_pipeline(
     user_query: str,
     top_k: int = DEFAULT_TOP_K,
     db_path: Path = config.DB_DIR,
+    results_dir: Path = config.RESULTS_DIR,
 ) -> str:
     """
     3번 방(Inference Layer) 파이프라인의 진입점.
 
-    [Qdrant 검색 -> LLaVA 이미지 검증 -> Llama-3 최종 답변 생성] 흐름을
-    순서대로 실행한다.
+    [Qdrant 검색 -> LLaVA 이미지 검증 -> Llama-3 최종 답변 생성 -> 결과 저장]
+    흐름을 순서대로 실행한다. 실행되는 동안의 모든 로그는 콘솔에 출력되는
+    동시에 storage/results/<실행시각>/run.log 에도 그대로 기록되고, 검색+시각
+    추론이 끝난 최종 데이터는 같은 폴더의 result.json에 저장된다.
 
     Args:
         user_query: 사용자의 자연어 질문 (예: "빨간 차가 보이는 장면 있어?")
         top_k: Qdrant에서 검색할 후보 프레임 개수 (기본값: 3)
         db_path: Qdrant 로컬 DB 폴더 경로 (기본값: config.DB_DIR)
+        results_dir: 결과 JSON/로그를 저장할 상위 폴더 (기본값: config.RESULTS_DIR)
 
     Returns:
         Llama-3가 생성한 최종 한국어 답변 문자열. 후보 프레임을 하나도 찾지
-        못하면 안내 문구를 대신 반환한다.
+        못하거나 오류가 발생하면 안내 문구를 대신 반환한다.
     """
-    print(f'\n[Inference] 사용자 질문: "{user_query}"')
+    result_manager = ResultManager(results_dir=results_dir)
 
-    print("[Inference] Qdrant에서 CLIP 임베딩 기반으로 후보 장면을 검색 중입니다...")
-    search_engine = SearchEngine(db_path=db_path)
-    candidates = search_engine.search(user_query, top_k=top_k)
+    with result_manager.capture_logs():
+        try:
+            print(f'\n[Inference] 사용자 질문: "{user_query}"')
 
-    if not candidates:
-        print("[Inference] 후보 장면을 찾지 못해 파이프라인을 종료합니다.")
-        return "죄송합니다. 질문과 관련된 장면을 영상 데이터에서 찾지 못했습니다."
+            print("[Inference] Qdrant에서 CLIP 임베딩 기반으로 후보 장면을 검색 중입니다...")
+            search_engine = SearchEngine(db_path=db_path)
+            candidates = search_engine.search(user_query, top_k=top_k)
 
-    print(f"[Inference] LLaVA 모델이 후보 장면 {len(candidates)}개를 정밀 분석 중입니다...")
-    llava_analyzer = LlavaAnalyzer()
-    visual_findings = []
-    for candidate in candidates:
-        finding = llava_analyzer.analyze(user_query, candidate["frame_path"])
-        finding["payload"] = candidate["payload"]
-        visual_findings.append(finding)
+            if not candidates:
+                print("[Inference] 후보 장면을 찾지 못해 파이프라인을 종료합니다.")
+                result_manager.save_result([], status="no_match")
+                return "죄송합니다. 질문과 관련된 장면을 영상 데이터에서 찾지 못했습니다."
 
-        exists_label = "존재함" if finding["exists"] else "존재하지 않음"
-        print(f"      - {Path(candidate['frame_path']).name}: {exists_label}")
+            print(f"[Inference] LLaVA 모델이 후보 장면 {len(candidates)}개를 정밀 분석 중입니다...")
+            llava_analyzer = LlavaAnalyzer()
+            visual_findings = []
+            for candidate in candidates:
+                finding = llava_analyzer.analyze(user_query, candidate["frame_path"])
+                finding["payload"] = candidate["payload"]
+                visual_findings.append(finding)
 
-    # Llama-3를 로드하기 전에 LLaVA를 메모리에서 내려 18GB 환경의 부담을 줄인다.
-    llava_analyzer.unload()
+                exists_label = "존재함" if finding["exists"] else "존재하지 않음"
+                print(f"      - {Path(candidate['frame_path']).name}: {exists_label}")
 
-    print("[Inference] Llama-3 모델이 최종 답변을 생성 중입니다...")
-    llama_responder = LlamaResponder()
-    final_answer = llama_responder.generate_answer(user_query, visual_findings)
-    llama_responder.unload()
+            # Llama-3를 로드하기 전에 LLaVA를 메모리에서 내려 18GB 환경의 부담을 줄인다.
+            llava_analyzer.unload()
 
-    print(f"[Inference] 최종 답변:\n{final_answer}")
-    return final_answer
+            print("[Inference] Llama-3 모델이 최종 답변을 생성 중입니다...")
+            llama_responder = LlamaResponder()
+            final_answer = llama_responder.generate_answer(user_query, visual_findings)
+            llama_responder.unload()
+
+            print(f"[Inference] 최종 답변:\n{final_answer}")
+
+            matches = result_manager.build_matches(candidates, visual_findings)
+            status = "success" if matches else "no_match"
+            result_manager.save_result(matches, status=status)
+
+            return final_answer
+        except Exception as exc:  # noqa: BLE001 - 결과 파일에 오류를 남기고 다시 던진다
+            print(f"[Inference] 파이프라인 실행 중 오류가 발생했습니다: {exc}")
+            result_manager.save_result([], status="error", error_message=str(exc))
+            raise
 
 
 if __name__ == "__main__":
