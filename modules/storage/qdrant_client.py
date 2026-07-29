@@ -183,7 +183,12 @@ class QdrantStorageManager:
             print(f"[QdrantStorageManager] 포인트 개수 조회 실패: {exc}")
             return 0
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list:
+    def search(
+        self,
+        query_vector: list[float],
+        top_k: int = 5,
+        query_filter: qmodels.Filter | None = None,
+    ) -> list:
         """쿼리 벡터와 가장 유사한 포인트들을 검색한다 (실패 시 빈 리스트).
 
         qdrant-client 1.10+ 부터 기존 `search()` API는 제거되었고 `query_points()`로
@@ -191,11 +196,21 @@ class QdrantStorageManager:
         (ScoredPoint 리스트, 각 원소는 `.id`/`.score`/`.payload` 속성을 가짐)만
         꺼내 돌려줘서, 호출하는 쪽(SearchEngine 등)은 API 변경과 무관하게 동일한
         인터페이스를 사용할 수 있다.
+
+        Args:
+            query_vector: 유사도를 계산할 쿼리 벡터 (CLIP 임베딩)
+            top_k: 반환할 최대 포인트 수
+            query_filter: Dense 벡터 검색과 함께 같은 호출에서 적용할 Sparse
+                payload 필터(예: objects/texts 필드 조건). None이면 필터 없이
+                순수 벡터 검색만 수행한다. 벡터 유사도 계산과 payload 필터링이
+                Qdrant 내부에서 한 번의 쿼리로 함께 처리되므로 "1-Stage
+                하이브리드 검색"이 된다 (SearchEngine이 필터를 만들어 전달).
         """
         try:
             response = self.client.query_points(
                 collection_name=self.collection_name,
                 query=query_vector,
+                query_filter=query_filter,
                 limit=top_k,
             )
             return response.points
